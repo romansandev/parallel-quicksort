@@ -34,43 +34,63 @@ int main()
  
 void quicksort(int *array, int start, int end, int threads)
 {
-    int pivot, i, numL = 0, u = 0;
-    int* lvec = calloc(end - start, sizeof(int));
-    int* copia = malloc(sizeof(int) * (end - start));
-    pivot = array[start];
+    
+    if(threads <= 1 || end - start < 2) //si solo se ha asignado un hilo a esta parte (sea L o U) o si sólo hay un número en ella, salgo de la recursión parallela
+        return;                 //habría que añadir que, en caso de que haya más de un número, debería realizarse para el único hilo con el que se ha llamado a esta recursión el algoritmo no paralelo
 
-    if(threads <= 1)
-        return;
-    for(i = start; i <= end - (end - start)/threads; i += (end - start)/threads)
-        #pragma omp task
-            ordena(array, i, i + (end - start)/threads, pivot, lvec);
+    int pivot, i, u = 0; //u es una variable que guardará el número de elementos menores que el pivote
+    
+    int* lvec = calloc(end - start, sizeof(int)); //un vector que tendrá 1s en las posiciones en que el array tenga elementos menores o iguales que el pivote y 0s en las que los elementos sean mayores
+                                                //esta asignación de 1s y 0s se hace una vez los trozos del array se han ordenado en paralelo según el pivote
+    
+    int* copia = malloc(sizeof(int) * (end - start)); //servirá como vector auxiliar para no pisar los datos en el array original
+
+    srand(time(NULL));
+    pivot = array[rand() % (end - start) + start];
+    
+    printf("pivot: %d\n", pivot);
+
+    for(i = 0; i < threads; i++) //se lanzan tantas tareas como hilos se hayan asignado a el array (o trozo del array) repartiendo las posiciones equitativamente entre los hilos
+    {
+        if (i+1 == threads)
+        {   
+            #pragma omp task    
+                ordena(array, start + (i*((end - start) / threads)), end, pivot, lvec); 
+        }
+        else
+        {
+            
+            #pragma omp task    
+                ordena(array, start + (i*((end - start) / threads)), start + ((i + 1)*((end - start) / threads)), pivot, lvec);
+        }
+    }
+
+    #pragma omp taskwait //esperamos a que los trozos hayan sido ordenados
+    
+    for (i = start; i < end; i++) //rellenamos la variable u con el número total de elementos menores que el pivote
+        if(lvec[i] == 1)
+            u++;
+
+    for(i = 0; i < threads; i++)
+        if (i+1 == threads)
+            #pragma omp task
+                merge(array,  start + (i*((end - start) / threads)), end, lvec, u, copia);
+        else
+            #pragma omp task
+                merge(array,  start + (i*((end - start) / threads)),  start + ((i + 1)*((end - start) / threads)), lvec, u, copia);
 
     #pragma omp taskwait
     
-    for (i = start; i < end; i++)
-        if(lvec[i] == 1)
-            u++;
-    for(i = start; i <= end - (end - start)/threads; i += (end - start)/threads)
-        #pragma omp task
-            merge(array, i, i + (end - start)/threads, lvec, u, copia);
-
-    #pragma omp taskwait
+    int repartohilos = (int) (((float) u / (end - start) ) * threads + 0.5 );
+    int rpeartohilos2 = (int) (((float) ((end - start) - u) / (end - start) ) * threads + 0.5 );
 
     for(i = start; i < end; i++)
         array[i] = copia[i];
-
-
-    int repartohilos = (int) (((float) u / (end - start) ) * threads + 0.5 );
-
-    //printf("quicksort(array, %d, %d, %d);\n", start, start + u, repartohilos);
-
-    //printf("quicksort(array, %d, %d, %d);\n", start + u, end, threads - repartohilos);
-/*
+    /*
     #pragma omp task
         quicksort(array, start, start + u, repartohilos);
-
     #pragma omp task
-        quicksort(array, start + u, end, threads - repartohilos);*/
+        quicksort(array, start + u, end, rpeartohilos2);*/
 
 }
 
