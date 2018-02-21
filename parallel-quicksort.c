@@ -67,11 +67,11 @@ void quicksort(int *array, int start, int end, int threads)
 
     #pragma omp taskwait //esperamos a que los trozos hayan sido ordenados
     
-    for (i = start; i < end; i++) //rellenamos la variable u con el número total de elementos menores que el pivote
+    for (i = start; i < end; i++) //rellenamos la variable @u con el número total de elementos menores que el pivote
         if(lvec[i] == 1)
             u++;
 
-    for(i = 0; i < threads; i++)
+    for(i = 0; i < threads; i++) //uno las partes menores que el pivote a la izquierda del vector y las mayores a la derecha en paralelo con tareas 
         if (i+1 == threads)
             #pragma omp task
                 merge(array,  start + (i*((end - start) / threads)), end, lvec, u, copia);
@@ -80,10 +80,15 @@ void quicksort(int *array, int start, int end, int threads)
                 merge(array,  start + (i*((end - start) / threads)),  start + ((i + 1)*((end - start) / threads)), lvec, u, copia);
 
     #pragma omp taskwait
-    
+
+    //en este punto tengo en @copia el vector ordenado para esta iteración
+
+    //En función al tamaño de la parte menor y mayor que el pivote, reparto el número de hilos disponible
     int repartohilos = (int) (((float) u / (end - start) ) * threads + 0.5 );
     int rpeartohilos2 = (int) (((float) ((end - start) - u) / (end - start) ) * threads + 0.5 );
 
+
+    //copio @copia en @array, esto debería hacerse sólo al final, pasando simplemente @copia durante la recursión
     for(i = start; i < end; i++)
         array[i] = copia[i];
     /*
